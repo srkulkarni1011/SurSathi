@@ -1,0 +1,1041 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karaoke scale changer</title>
+<!-- Uses a local copy of Tone.js (same folder) if present, so it also works without internet; otherwise loads it online. -->
+<script src="Tone.js"></script>
+<script>window.Tone || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"><\/script>');</script>
+<style>
+  :root{
+    --bg:#DDE7E1; --panel:#F7F9F6; --ink:#14272B; --muted:#4B6065;
+    --song:#0F6B6B; --singer:#8C2332; --gold:#F2A900; --line:#B7C6BE;
+    --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Noto Serif Devanagari",Georgia,serif;
+    --sans:system-ui,-apple-system,"Segoe UI","Noto Sans Devanagari",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5}
+  .wrap{max-width:780px;margin:0 auto;padding:28px 16px 64px}
+  h1{font-family:var(--serif);font-weight:600;font-size:clamp(28px,5vw,40px);margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--muted);margin:0 0 20px}
+  section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+  h2{font-family:var(--serif);font-size:20px;font-weight:600;margin:0 0 4px}
+  .hint{color:var(--muted);font-size:14px;margin:0 0 12px}
+  button,select,input{font:inherit}
+  button{cursor:pointer}
+  :focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  [hidden]{display:none!important}
+
+  #status{min-height:22px;font-size:14px;color:var(--song);margin:0 0 10px}
+  #status.err{color:var(--singer)}
+  #saveState{font-size:13px;color:var(--muted);margin:0 0 14px;min-height:20px}
+
+  .btn{background:var(--ink);color:#fff;border:0;border-radius:999px;padding:11px 20px;font-weight:600}
+  .btn:hover{background:#25414A}
+  .ghost{background:transparent;border:1px solid var(--ink);color:var(--ink);border-radius:999px;padding:9px 16px}
+  .ghost:hover{background:#EAF0EC}
+  .ghost[aria-pressed=true]{background:var(--ink);color:#fff}
+  .small{padding:6px 12px;font-size:14px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+
+  .search{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;margin:12px 0 8px;background:#fff}
+  .list{list-style:none;margin:0;padding:0;max-height:250px;overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .list li button{display:flex;justify-content:space-between;gap:10px;width:100%;text-align:left;border:0;background:transparent;padding:10px 12px;border-bottom:1px solid #E6EDE8;color:var(--ink)}
+  .list li button:hover{background:#EEF4F0}
+  .list li button[aria-current=true]{background:#DCEBE6;font-weight:600}
+  .badge{color:var(--song);font-size:13px;white-space:nowrap}
+  .empty{padding:16px;color:var(--muted);font-size:14px}
+  #songName{font-family:var(--serif);font-size:18px;margin:12px 0 0;word-break:break-word}
+
+  .kb{position:relative;display:flex;height:128px;border:1px solid var(--ink);border-radius:8px;overflow:hidden;background:var(--ink);margin-top:6px}
+  .kb button{border:0;padding:0}
+  .kb .white{flex:1;background:#FCFCF8;color:var(--ink);border-right:1px solid var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:2px;padding-bottom:8px;font-weight:600;font-size:15px}
+  .kb .kl{font-size:12px;font-weight:500;opacity:.75}
+  .kb .white:last-of-type{border-right:0}
+  .kb .black{position:absolute;top:0;height:60%;width:8.4%;transform:translateX(-50%);background:var(--ink);color:#E8EFEA;border:1px solid #000;border-radius:0 0 6px 6px;font-size:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:1px;padding-bottom:6px;z-index:2}
+  .kb .black .kl{font-size:10px}
+  @media (max-width:520px){.kb .black .kl{display:none}.kb .white .kl{font-size:10px}}
+  .kb .white:hover{background:#EEF1EA}
+  .kb .black:hover{background:#2A444A}
+  .kb .on.white{background:var(--sel);color:#fff}
+  .kb .on.black{background:var(--sel);border-color:var(--sel);color:#fff}
+  #kbSinger{--sel:var(--singer)}
+  .kname{font-size:15px;margin:8px 0 0;min-height:22px}
+
+  .singerrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+  .singerrow select,.singerrow input{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .singerrow label{font-size:14px;color:var(--muted)}
+
+  .origbox{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 16px;padding-bottom:16px;border-bottom:1px solid var(--line)}
+  .origbox label{font-size:14px;color:var(--muted)}
+  .origbox select{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .onote{font-size:13px;color:var(--muted)}
+
+  .result{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .shift{font-family:var(--serif);font-size:clamp(44px,10vw,64px);font-weight:600;line-height:1}
+  .shiftlabel{color:var(--muted)}
+  .warn{color:var(--singer);font-size:14px;margin:8px 0 0;min-height:21px}
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px}
+  .row label{font-size:14px;color:var(--muted);min-width:96px}
+  .row input[type=range]{flex:1;min-width:140px;accent-color:var(--singer)}
+  .val{font-variant-numeric:tabular-nums;min-width:70px;text-align:right;font-size:14px}
+  .step{display:inline-flex;align-items:center;gap:8px}
+  .step button{width:40px;height:40px;border-radius:50%;border:1px solid var(--ink);background:#fff;font-size:20px;line-height:1}
+  .step button:hover{background:#EEF3EF}
+  .step output{min-width:36px;text-align:center;font-variant-numeric:tabular-nums}
+
+  .transport{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .play{background:var(--gold);color:var(--ink);border:0;border-radius:999px;padding:12px 28px;font-weight:700;font-size:16px;min-width:120px}
+  .play:hover{filter:brightness(.95)}
+  #seek{width:100%;accent-color:var(--song);margin:14px 0 0}
+  .times{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+
+  .radios{display:inline-flex;gap:6px}
+  .radios label{min-width:0;color:var(--ink)}
+  .radios input{position:absolute;opacity:0}
+  .radios span{display:inline-block;padding:7px 14px;border:1px solid var(--ink);border-radius:999px;font-size:14px;cursor:pointer}
+  .radios input:checked + span{background:var(--ink);color:#fff}
+  .radios input:focus-visible + span{outline:3px solid var(--gold);outline-offset:2px}
+
+  .rec{border-color:#B3261E;color:#B3261E}
+  .rec:hover{background:#FBEAE8}
+  .rec[aria-pressed=true]{background:#B3261E;color:#fff}
+  .chk{display:flex;align-items:center;gap:8px;font-size:14px;margin-top:10px}
+  .chk input{width:18px;height:18px;accent-color:var(--singer)}
+  .recnote{font-size:13px;color:var(--muted);margin:10px 0 0}
+  .recmsg{font-size:14px;color:var(--song);margin:10px 0 0;min-height:20px}
+  .recmsg.err{color:var(--singer)}
+  .nudge{padding:6px 10px;min-width:48px}
+  #alignInfo{font-size:13px;color:var(--muted);margin:10px 0 0}
+  #recInfo{font-size:13px;color:var(--muted);margin:10px 0 0;min-height:20px}
+  .row select{padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Karaoke scale changer</h1>
+
+  <p id="status" role="status" aria-live="polite"></p>
+  <p id="saveState" aria-live="polite"></p>
+
+  <section id="secSong" aria-labelledby="h-lib">
+    <h2 id="h-lib">1. Song</h2>
+    <div class="bar">
+      <button class="btn" id="openFolder">Open music folder</button>
+      <button class="ghost" id="addFilesBtn">Add song files instead</button>
+      <input type="file" id="addFiles" accept="audio/*" multiple hidden>
+    </div>
+    <input class="search" id="search" type="search" placeholder="Search songs" aria-label="Search songs" hidden>
+    <ul class="list" id="list" hidden></ul>
+    <p id="songName"></p>
+  </section>
+
+  <section id="secScale" aria-labelledby="h-scale">
+    <h2 id="h-scale">2. Scales</h2>
+
+    <div class="origbox">
+      <label for="songScale">Song's scale</label>
+      <select id="songScale" disabled></select>
+      <span class="onote" id="origNote"></span>
+    </div>
+
+    <div class="singerrow">
+      <label for="singer">Singer</label>
+      <select id="singer"></select>
+      <input id="newSinger" type="text" placeholder="New singer name" aria-label="New singer name" maxlength="40">
+      <button class="ghost small" id="addSinger">Add singer</button>
+    </div>
+    <p class="hint">Scale the singer needs:</p>
+    <div class="kb" id="kbSinger" role="group" aria-label="Required scale"></div>
+    <div class="bar" style="margin-top:8px">
+      <p class="kname" id="nameSinger" style="margin:0">Not selected</p>
+      <button class="ghost small" id="playTarget">Play this note</button>
+    </div>
+  </section>
+
+  <section aria-labelledby="h-play">
+    <h2 id="h-play">3. Play</h2>
+
+    <div class="transport">
+      <button class="play" id="playBtn" disabled>Play</button>
+      <button class="ghost" id="restartBtn" disabled>Back to start</button>
+      <button class="ghost" id="cmpBtn" aria-pressed="false" disabled>Hear original key</button>
+      <button class="ghost rec" id="recBtn" aria-pressed="false" disabled>Record my singing</button>
+    </div>
+    <p class="recmsg" id="recMsg" aria-live="polite"></p>
+    <p class="recnote">To record, wear headphones so the music does not leak into the microphone.</p>
+    <label class="chk"><input type="checkbox" id="monitor"> Hear my voice in the headphones</label>
+    <input type="range" id="seek" min="0" max="100" step="0.1" value="0" aria-label="Seek" disabled>
+    <div class="times"><span id="tNow">0:00</span><span id="tTotal">0:00</span></div>
+
+    <div class="result" style="margin-top:18px">
+      <div class="shift" id="shiftNum">0</div>
+      <div class="shiftlabel" id="shiftLabel">semitones</div>
+    </div>
+    <p class="warn" id="warn"></p>
+
+    <div class="row">
+      <label for="fine">Fine tune</label>
+      <input type="range" id="fine" min="-50" max="50" step="1" value="0">
+      <span class="val" id="fineOut">0 cents</span>
+      <button class="ghost small" id="fineReset">Reset</button>
+    </div>
+    <div class="row">
+      <label for="songVol">Song volume</label>
+      <input type="range" id="songVol" min="-30" max="6" step="1" value="0">
+    </div>
+  </section>
+
+  <section id="recSection" aria-labelledby="h-rec" hidden>
+    <h2 id="h-rec">Your recording</h2>
+    <div class="transport">
+      <button class="play" id="pvPlay">Play recording</button>
+      <button class="ghost" id="pvStop">Back to start</button>
+    </div>
+    <input type="range" id="pvSeek" min="0" max="100" step="0.1" value="0" aria-label="Recording position" style="width:100%;margin-top:12px;accent-color:var(--song)">
+    <div class="times"><span id="pvNow">0:00</span><span id="pvTotal">0:00</span></div>
+    <div class="row">
+      <label for="recVoice">Voice volume</label>
+      <input type="range" id="recVoice" min="0" max="200" step="5" value="100">
+      <span class="val" id="recVoiceOut">100%</span>
+    </div>
+    <div class="row">
+      <label for="recMusic">Music volume</label>
+      <input type="range" id="recMusic" min="0" max="150" step="5" value="80">
+      <span class="val" id="recMusicOut">80%</span>
+    </div>
+    <div class="row">
+      <label for="recTiming">Voice timing</label>
+      <input type="range" id="recTiming" min="-500" max="1500" step="5" value="0">
+      <span class="val" id="recTimingOut">0 ms</span>
+      <button class="ghost small nudge" id="tMinus" aria-label="10 ms later">&minus;10</button>
+      <button class="ghost small nudge" id="tPlus" aria-label="10 ms earlier">+10</button>
+    </div>
+    <p class="recnote" style="margin-top:6px">The recording plays live while you change this. If your voice sounds late against the music, move Voice timing to the right until they match. If it sounds early, move it to the left.</p>
+    <div class="row">
+      <label for="recReverb">Reverb</label>
+      <select id="recReverb"><option value="off">Off</option><option value="light" selected>Light</option><option value="medium">Medium</option></select>
+    </div>
+    <div class="bar" style="margin-top:14px">
+      <button class="btn" id="recSave">Save recording (WAV)</button>
+      <button class="ghost" id="recDiscard">Discard</button>
+    </div>
+    <p id="alignInfo"></p>
+    <p id="recInfo"></p>
+  </section>
+
+  <section aria-labelledby="h-drone">
+    <h2 id="h-drone">Tanpura</h2>
+    <div class="transport">
+      <button class="ghost" id="droneBtn" aria-pressed="false">Start tanpura</button>
+      <div class="radios" role="radiogroup" aria-label="First string">
+        <label><input type="radio" name="str" value="pa" checked><span>Pa</span></label>
+        <label><input type="radio" name="str" value="ma"><span>Ma</span></label>
+        <label><input type="radio" name="str" value="ni"><span>Ni</span></label>
+      </div>
+    </div>
+    <div class="row">
+      <label for="droneVol">Volume</label>
+      <input type="range" id="droneVol" min="-36" max="0" step="1" value="-14">
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  if (typeof Tone === "undefined"){
+    const st = document.getElementById("status"); st.className = "err";
+    st.textContent = "The audio library could not load. Connect to the internet once and reload, or put Tone.js in the same folder as this file.";
+    return;
+  }
+  const NOTES = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const HARM  = ["1 सफ़ेद","1 काली","2 सफ़ेद","2 काली","3 सफ़ेद","4 सफ़ेद","3 काली","5 सफ़ेद","4 काली","6 सफ़ेद","5 काली","7 सफ़ेद"];
+  const SETTINGS_FILE = "scale-settings.json";
+  const LS_KEY = "karaoke-scale-changer-v1";
+  const AUDIO_RE = /\.(mp3|m4a|wav|ogg|flac|aac)$/i;
+
+  const $ = id => document.getElementById(id);
+  const say = (m, err=false) => { $("status").textContent = m; $("status").className = err ? "err" : ""; };
+  const nameOf = n => n === null || n === undefined ? "Not selected" : `${NOTES[n]}  (${HARM[n]})`;
+  const fmt = t => { t = Math.max(0, Math.floor(t)); return Math.floor(t/60) + ":" + String(t%60).padStart(2,"0"); };
+
+  /* ================= settings data ================= */
+  // Scales that an earlier version guessed automatically are dropped, so only scales you set yourself are used.
+  function cleanSongs(sg){
+    sg = sg && typeof sg === "object" ? sg : {};
+    Object.values(sg).forEach(r => { if (r && r.auto){ r.original = null; delete r.auto; delete r.conf; } });
+    return sg;
+  }
+  function normalize(d){
+    d = d && typeof d === "object" ? d : {};
+    const singers = Array.isArray(d.singers) && d.singers.length ? d.singers.map(String) : ["Singer 1"];
+    return {
+      version: 1,
+      singers,
+      lastSinger: singers.includes(d.lastSinger) ? d.lastSinger : singers[0],
+      songs: cleanSongs(d.songs)
+    };
+  }
+  let db = normalize(null);
+  let dirHandle = null;
+  let library = [];
+  let current = null;
+  const rec = () => current ? (db.songs[current.key] = db.songs[current.key] || { original:null, fine:0, targets:{} }) : null;
+
+  function lsLoad(){ try { const s = localStorage.getItem(LS_KEY); return s ? JSON.parse(s) : null; } catch(e){ return null; } }
+  function lsSave(){ try { localStorage.setItem(LS_KEY, JSON.stringify(db)); return true; } catch(e){ return false; } }
+
+  let saveTimer = null;
+  function scheduleSave(){ clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 400); }
+  async function doSave(){
+    const el = $("saveState");
+    const lsOk = lsSave();
+    if (dirHandle){
+      try {
+        const fh = await dirHandle.getFileHandle(SETTINGS_FILE, { create:true });
+        const w = await fh.createWritable();
+        await w.write(JSON.stringify(db, null, 2));
+        await w.close();
+        el.textContent = "Saved to " + SETTINGS_FILE + " in your music folder.";
+      } catch(e){
+        el.textContent = "Could not write to the folder (" + e.message + ").";
+      }
+    } else if (lsOk){
+      el.textContent = "Saved in this browser. Open a music folder to keep settings with the songs.";
+    } else {
+      el.textContent = "Not saved yet. Open this file directly in Chrome or Edge, or use Download backup.";
+    }
+  }
+
+  /* ================= audio graph ================= */
+  const songVol  = new Tone.Volume(0).toDestination();
+  const droneVol = new Tone.Volume(-14).toDestination();
+  const refVol   = new Tone.Volume(-8).toDestination();
+  const refSynth = new Tone.Synth({ oscillator:{ type:"sine" }, envelope:{ attack:.05, decay:.1, sustain:.85, release:.6 } }).connect(refVol);
+  const reverb   = new Tone.Freeverb({ roomSize:0.82, dampening:3200, wet:0.3 }).connect(droneVol);
+  const strings  = [0,1,2,3].map(() => new Tone.PluckSynth({ attackNoise:1.2, dampening:3500, resonance:0.992 }).connect(reverb));
+  let strIdx = 0, droneOn = false;
+  const loop = new Tone.Loop(time => { const i = strIdx++ % 4; strings[i].triggerAttack(droneFreqs()[i], time); }, 1.4);
+
+  const musicTap = new Tone.Gain(1);          // what goes into the recording: the song and the tanpura
+  droneVol.connect(musicTap);
+  const midiHz = m => 440 * Math.pow(2, (m - 69) / 12);
+
+  /* ================= state ================= */
+  let singer = db.lastSinger, target = null;
+  let fine = 0, compare = false;
+  let player = null, audioBuf = null, toneBuf = null;
+  let dur = 0, playing = false, startedAt = 0, offset = 0, seeking = false;
+
+  /* ================= keyboards ================= */
+  function keyLabel(b, n){
+    const a = document.createElement("span"); a.className = "kn"; a.textContent = NOTES[n];
+    const l = document.createElement("span"); l.className = "kl"; l.textContent = HARM[n];
+    b.append(a, l); b.title = NOTES[n] + " = " + HARM[n];
+  }
+  function buildKeyboard(root, onPick){
+    const whites = [0,2,4,5,7,9,11];
+    const blacks = [[1,1],[3,2],[6,4],[8,5],[10,6]];
+    whites.forEach(n => {
+      const b = document.createElement("button");
+      b.className = "white"; b.dataset.note = n; keyLabel(b, n);
+      b.setAttribute("aria-pressed","false");
+      b.addEventListener("click", () => onPick(n));
+      root.appendChild(b);
+    });
+    blacks.forEach(([n,idx]) => {
+      const b = document.createElement("button");
+      b.className = "black"; b.dataset.note = n; keyLabel(b, n);
+      b.style.left = (idx/7*100) + "%";
+      b.setAttribute("aria-pressed","false");
+      b.addEventListener("click", () => onPick(n));
+      root.appendChild(b);
+    });
+  }
+  function markKey(root, note){
+    root.querySelectorAll("button").forEach(b => {
+      const on = note !== null && note !== undefined && Number(b.dataset.note) === note;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+  buildKeyboard($("kbSinger"), n => setTarget(n));
+
+  function setTarget(n){
+    target = n;
+    if (current){ rec().targets[singer] = n; scheduleSave(); }
+    markKey($("kbSinger"), n);
+    $("nameSinger").textContent = nameOf(n);
+    refresh();
+  }
+
+  /* ================= singers ================= */
+  function renderSingers(){
+    const sel = $("singer"); sel.innerHTML = "";
+    db.singers.forEach(s => { const o = document.createElement("option"); o.value = s; o.textContent = s; sel.appendChild(o); });
+    sel.value = singer;
+  }
+  $("singer").addEventListener("change", e => {
+    singer = e.target.value; db.lastSinger = singer; scheduleSave();
+    target = current ? (rec().targets[singer] ?? null) : null;
+    markKey($("kbSinger"), target); $("nameSinger").textContent = nameOf(target);
+    refresh();
+  });
+  $("addSinger").addEventListener("click", () => {
+    const name = $("newSinger").value.trim();
+    if (!name) return say("Type the singer's name first.", true);
+    if (db.singers.includes(name)) return say("That singer already exists.", true);
+    db.singers.push(name); singer = name; db.lastSinger = name;
+    $("newSinger").value = ""; renderSingers(); scheduleSave();
+    target = null; markKey($("kbSinger"), null); $("nameSinger").textContent = nameOf(null);
+    say("Added " + name + ". Now tap their required scale."); refresh();
+  });
+
+  /* ================= pitch maths ================= */
+  // The song's scale: the one you chose for this song, otherwise the tag in the file name, e.g. "Song name [A#].m4a"
+  function scaleFromName(name){
+    const base = name.normalize("NFD").replace(/\.[^.\/]+$/, "").replace(/\u093C/g, "");
+    const SHARP = { c:0, "c#":1, d:2, "d#":3, e:4, f:5, "f#":6, g:7, "g#":8, a:9, "a#":10, b:11 };
+    const FLAT  = { db:1, eb:3, gb:6, ab:8, bb:10 };
+    const KALI = [1,3,6,8,10], SAFED = [0,2,4,5,7,9,11];
+    const groups = (base.match(/[\[\(][^\]\)]{1,14}[\]\)]/g) || []).reverse();   // the last tag in the name wins
+    for (const g of groups){
+      const t = g.slice(1, -1).trim().toLowerCase().replace(/\u266F/g, "#").replace(/\u266D/g, "b").replace(/\s+/g, " ");
+      if (Object.prototype.hasOwnProperty.call(SHARP, t)) return SHARP[t];
+      if (Object.prototype.hasOwnProperty.call(FLAT, t)) return FLAT[t];
+      let m = t.match(/^(kali|safed|k|s)\s?([1-7])$/);
+      if (m){ const i = Number(m[2]) - 1; if (m[1][0] === "k"){ if (i < 5) return KALI[i]; } else return SAFED[i]; }
+      m = t.match(/^(\u0915\u093E\u0932\u0940|\u0938\u092B\u0947\u0926)\s?([1-7])$/) ;
+      let kind = null, num = null;
+      if (m){ kind = m[1]; num = m[2]; }
+      else { m = t.match(/^([1-7])\s?(\u0915\u093E\u0932\u0940|\u0938\u092B\u0947\u0926)$/); if (m){ kind = m[2]; num = m[1]; } }
+      if (kind){ const i = Number(num) - 1; if (kind === "\u0915\u093E\u0932\u0940"){ if (i < 5) return KALI[i]; } else return SAFED[i]; }
+    }
+    return null;
+  }
+  const scaleOf = e => {
+    const r = db.songs[e.key];
+    if (r && r.original != null) return r.original;
+    const t = scaleFromName(e.name);
+    if (t !== null) return t;
+    return r && r.detected != null ? r.detected : null;
+  };
+  let detecting = false;
+  function original(){ return current ? scaleOf(current) : null; }
+  function autoShift(){
+    const o = original();
+    if (o === null || target === null) return 0;
+    let d = (target - o + 12) % 12;
+    if (d > 6) d -= 12;
+    return d;
+  }
+  const totalSemis = () => autoShift();
+  const totalCents = () => totalSemis()*100 + fine;
+
+  function refresh(){
+    const s = totalSemis();
+    $("shiftNum").textContent = (s > 0 ? "+" : s < 0 ? "\u2212" : "") + Math.abs(s);
+    $("shiftLabel").textContent = (Math.abs(s) === 1 ? "semitone" : "semitones") +
+      (fine !== 0 ? ", " + (fine > 0 ? "+" : "\u2212") + Math.abs(fine) + " cents fine tune" : "");
+    $("fineOut").textContent = (fine > 0 ? "+" : "") + fine + " cents";
+    const w = $("warn");
+    if (!current) w.textContent = "";
+    else if (original() === null) w.textContent = detecting ? "Detecting the song's scale..." : "Choose the song's scale above. No shift is applied until then.";
+    else if (target === null) w.textContent = "Tap the required scale to apply the shift.";
+    else if (Math.abs(s) > 4) w.textContent = "Large shift: expect some loss of quality, especially on tabla.";
+    else w.textContent = "";
+    if (player) player.detune = compare ? 0 : totalCents();
+  }
+
+  /* ================= automatic scale detection ================= */
+// ---- scale detection core (shared by the app and the test) ----
+function toMono(ab){
+  const n = ab.length, c = ab.numberOfChannels, out = new Float32Array(n);
+  for (let k = 0; k < c; k++){ const d = ab.getChannelData(k); for (let i = 0; i < n; i++) out[i] += d[i] / c; }
+  return out;
+}
+function decimate4(x){
+  const m = Math.floor(x.length / 4), y = new Float32Array(m);
+  for (let i = 0; i < m; i++) y[i] = (x[4*i] + x[4*i+1] + x[4*i+2] + x[4*i+3]) / 4;
+  return y;
+}
+function fft(re, im){
+  const n = re.length;
+  for (let i = 1, j = 0; i < n; i++){
+    let bit = n >> 1;
+    for (; j & bit; bit >>= 1) j ^= bit;
+    j ^= bit;
+    if (i < j){ let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+  }
+  for (let len = 2; len <= n; len <<= 1){
+    const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang), half = len >> 1;
+    for (let i = 0; i < n; i += len){
+      let cr = 1, ci = 0;
+      for (let k = 0; k < half; k++){
+        const a = i + k, b = a + half;
+        const vr = re[b]*cr - im[b]*ci, vi = re[b]*ci + im[b]*cr;
+        re[b] = re[a] - vr; im[b] = im[a] - vi;
+        re[a] += vr;        im[a] += vi;
+        const nr = cr*wr - ci*wi; ci = cr*wi + ci*wr; cr = nr;
+      }
+    }
+  }
+}
+const FN = 8192, FB = 120;
+const HANN = (() => { const w = new Float64Array(FN); for (let i = 0; i < FN; i++) w[i] = 0.5 - 0.5*Math.cos(2*Math.PI*i/(FN-1)); return w; })();
+
+// Pitch histogram with 10-cent bins (bin 0 = a note exactly in tune with A=440), built from spectral peaks.
+// Returns two histograms: full range (for key and tuning) and low range (for tanpura and bass).
+function pitchHistograms(x, sr){
+  const d = decimate4(x), r = sr / 4;
+  const segLen = Math.floor(30 * r / FN) * FN;                 // 30 s segments
+  const starts = [];
+  if (d.length < segLen * 1.2) starts.push(Math.max(0, Math.floor((d.length - Math.min(d.length, segLen)) / 2)));
+  else [0.15, 0.45, 0.75].forEach(f => starts.push(Math.min(d.length - segLen, Math.floor(d.length * f))));
+  const full = new Float64Array(FB), low = new Float64Array(FB);
+  const re = new Float64Array(FN), im = new Float64Array(FN), mag = new Float64Array(FN/2);
+  const kLo = Math.ceil(60 * FN / r), kMid = Math.floor(260 * FN / r), kHi = Math.min(FN/2 - 2, Math.floor(2000 * FN / r));
+  for (const st of starts){
+    const frames = Math.floor(Math.min(segLen, d.length - st) / FN);
+    for (let f = 0; f < frames; f++){
+      const base = st + f*FN;
+      for (let i = 0; i < FN; i++){ re[i] = d[base + i] * HANN[i]; im[i] = 0; }
+      fft(re, im);
+      let mx = 0;
+      for (let k = kLo - 1; k <= kHi + 1; k++){ mag[k] = Math.hypot(re[k], im[k]); if (mag[k] > mx) mx = mag[k]; }
+      if (mx <= 0) continue;
+      let sumF = 0, sumL = 0; const tf = new Float64Array(FB), tl = new Float64Array(FB);
+      for (let k = Math.max(2, kLo); k <= kHi; k++){
+        const m = mag[k];
+        if (m > 0.05 * mx && m > mag[k-1] && m >= mag[k+1]){
+          const la = Math.log(mag[k-1] + 1e-12), lb = Math.log(m + 1e-12), lc = Math.log(mag[k+1] + 1e-12);
+          const den = la - 2*lb + lc, p = den !== 0 ? 0.5 * (la - lc) / den : 0;
+          const midi = 69 + 12 * Math.log2(((k + p) * r / FN) / 440);
+          const pos = (((midi % 12) + 12) % 12) * (FB / 12);
+          const i0 = Math.floor(pos), w = pos - i0, w0 = m * (1 - w), w1 = m * w;
+          tf[i0 % FB] += w0; tf[(i0 + 1) % FB] += w1; sumF += m;
+          if (k <= kMid){ tl[i0 % FB] += w0; tl[(i0 + 1) % FB] += w1; sumL += m; }
+        }
+      }
+      for (let i = 0; i < FB; i++){ if (sumF > 0) full[i] += tf[i] / sumF; if (sumL > 0) low[i] += tl[i] / sumL; }
+    }
+  }
+  return { full, low };
+}
+// How far (in cents, -50..+50) is the song from standard A=440 tuning?
+function tuningOffset(h){
+  let sx = 0, sy = 0;
+  for (let i = 0; i < FB; i++){ const a = 2 * Math.PI * (i % 10) / 10; sx += h[i] * Math.cos(a); sy += h[i] * Math.sin(a); }
+  return Math.atan2(sy, sx) / (2 * Math.PI) * 100;        // 10 bins span 100 cents
+}
+function foldToNotes(h, offsetCents){
+  const c = new Float64Array(12);
+  for (let i = 0; i < FB; i++){ const adj = (((i * 10 - offsetCents) % 1200) + 1200) % 1200; c[Math.floor((adj + 50) / 100) % 12] += h[i]; }
+  let t = 0; for (let n = 0; n < 12; n++) t += c[n];
+  if (t > 0) for (let n = 0; n < 12; n++) c[n] /= t;
+  return c;
+}
+const KS_MAJ = [6.35,2.23,3.48,2.33,4.38,4.09,2.52,5.19,2.39,3.66,2.29,2.88];
+const KS_MIN = [6.33,2.68,3.52,5.38,2.60,3.53,2.54,4.75,3.98,2.69,3.34,3.17];
+function corr(a, b){
+  let ma = 0, mb = 0; for (let i = 0; i < 12; i++){ ma += a[i]; mb += b[i]; } ma /= 12; mb /= 12;
+  let s = 0, va = 0, vb = 0; for (let i = 0; i < 12; i++){ const x = a[i]-ma, y = b[i]-mb; s += x*y; va += x*x; vb += y*y; }
+  return s / (Math.sqrt(va * vb) || 1);
+}
+const norm01 = v => { const mn = Math.min(...v), mx = Math.max(...v); return v.map(x => mx > mn ? (x - mn) / (mx - mn) : 0); };
+
+// Returns { sa, ranking:[best three], tuning } using three kinds of evidence:
+// the tanpura drone (Sa and Pa strong in the low register), the key profile of the whole mix, and the bass.
+function detectScale(audioBuf){
+  const { full, low } = pitchHistograms(toMono(audioBuf), audioBuf.sampleRate);
+  const tuning = tuningOffset(full);
+  const cFull = foldToNotes(full, tuning), cLow = foldToNotes(low, tuning);
+  const drone = [], key = [], bass = [];
+  for (let s = 0; s < 12; s++){
+    drone.push(cLow[s] + 0.6 * cLow[(s + 7) % 12]);
+    const rot = i => cFull[(s + i) % 12], rv = Array.from({ length: 12 }, (_, i) => rot(i));
+    key.push(Math.max(corr(rv, KS_MAJ), corr(rv, KS_MIN)));
+    bass.push(cLow[s]);
+  }
+  const D = norm01(drone), K = norm01(key), B = norm01(bass);
+  const total = D.map((_, s) => 0.4 * D[s] + 0.4 * K[s] + 0.2 * B[s]);
+  const order = total.map((v, s) => ({ s, v })).sort((a, b) => b.v - a.v);
+  return { sa: order[0].s, ranking: order.slice(0, 3).map(o => o.s), tuning: Math.round(tuning), margin: order[0].v - order[1].v };
+}
+
+  async function analyseSong(){
+    const entry = current;
+    if (!entry || !audioBuf) return;
+    detecting = true; refreshOrig(); refresh(); say("Detecting the song's scale...");
+    await new Promise(r => setTimeout(r, 30));
+    try {
+      const d = detectScale(audioBuf);
+      const r = (db.songs[entry.key] = db.songs[entry.key] || { original:null, fine:0, targets:{} });
+      r.detected = d.sa; r.ranking = d.ranking; r.tuning = d.tuning; r.lowConf = d.margin < 0.06;
+      scheduleSave();
+    } catch(e){ console.error(e); }
+    detecting = false;
+    if (current === entry){ refreshOrig(); refresh(); renderList(); }
+  }
+
+  /* ================= song's scale line ================= */
+  const hearNote = async n => { await Tone.start(); refSynth.triggerAttackRelease(midiHz(48 + n), 3); };
+  (() => {
+    const sel = $("songScale");
+    const first = document.createElement("option"); first.value = ""; first.textContent = "Automatic"; sel.appendChild(first);
+    NOTES.forEach((nm, n) => { const o = document.createElement("option"); o.value = n; o.textContent = nm + "  (" + HARM[n] + ")"; sel.appendChild(o); });
+  })();
+  function refreshOrig(){
+    const sel = $("songScale"), has = !!current;
+    sel.disabled = !has;
+    const first = sel.options[0];
+    if (!has){ first.textContent = "Automatic"; sel.value = ""; $("origNote").textContent = ""; return; }
+    const r = db.songs[current.key] || {};
+    const manual = r.original != null, tag = scaleFromName(current.name);
+    const auto = tag !== null ? tag : (r.detected != null ? r.detected : null);
+    first.textContent = auto !== null ? "Automatic: " + nameOf(auto) : (detecting ? "Detecting..." : "Automatic");
+    sel.value = manual ? String(r.original) : "";
+    $("origNote").textContent = manual ? "chosen by you" : tag !== null ? "read from the file name"
+      : r.detected != null ? "detected automatically" + (r.lowConf ? ", not sure, please check" : "") : "";
+  }
+  $("songScale").addEventListener("change", e => {
+    if (!current) return;
+    const v = e.target.value, r = rec();
+    r.original = v === "" ? null : Number(v);
+    scheduleSave(); refreshOrig(); refresh(); renderList();
+  });
+  $("playTarget").addEventListener("click", () => { if (target === null) return say("Tap the required scale first.", true); hearNote(target); });
+
+  /* ================= library ================= */
+  async function scanDir(dir, prefix, out, depth){
+    for await (const [name, h] of dir.entries()){
+      if (name.startsWith(".")) continue;
+      if (h.kind === "file"){ if (AUDIO_RE.test(name)) out.push({ key: prefix + name, name, handle: h }); }
+      else if (depth < 4) await scanDir(h, prefix + name + "/", out, depth + 1);
+    }
+  }
+  function renderList(){
+    const ul = $("list"), q = $("search").value.trim().toLowerCase();
+    ul.innerHTML = "";
+    const items = library.filter(e => e.key.toLowerCase().includes(q));
+    if (!items.length){ const li = document.createElement("li"); li.className = "empty"; li.textContent = library.length ? "No songs match your search." : "No audio files found."; ul.appendChild(li); return; }
+    items.forEach(e => {
+      const li = document.createElement("li"), b = document.createElement("button");
+      const t = document.createElement("span"); t.textContent = e.key;
+      const s = document.createElement("span"); s.className = "badge";
+      const o = scaleOf(e);
+      s.textContent = o !== null && o !== undefined ? "scale " + NOTES[o] : "";
+      b.append(t, s);
+      if (current && current.key === e.key) b.setAttribute("aria-current", "true");
+      b.addEventListener("click", () => openSong(e));
+      li.appendChild(b); ul.appendChild(li);
+    });
+  }
+  function showLibrary(){ $("list").hidden = false; $("search").hidden = false; renderSingers(); renderList(); }
+  $("search").addEventListener("input", renderList);
+
+  $("openFolder").addEventListener("click", async () => {
+    if (!window.showDirectoryPicker) return say("This browser cannot open folders. Use Chrome or Edge on a computer, or choose Add song files.", true);
+    let h;
+    try { h = await window.showDirectoryPicker({ mode: "readwrite" }); }
+    catch(e){ if (e.name !== "AbortError") say("Folder access was blocked (" + e.message + "). Save this page as a file and open it directly in Chrome or Edge.", true); return; }
+    try {
+      dirHandle = h;
+      say("Reading folder...");
+      try { const fh = await h.getFileHandle(SETTINGS_FILE); db = normalize(JSON.parse(await (await fh.getFile()).text())); }
+      catch(e){ db = normalize(lsLoad()); }
+      singer = db.lastSinger;
+      const out = []; await scanDir(h, "", out, 0);
+      out.sort((a, b) => a.key.localeCompare(b.key));
+      library = out; showLibrary();
+      say(out.length ? out.length + " songs found. Pick one." : "No audio files found in that folder.", !out.length);
+      doSave();
+    } catch(e){ say("Could not read the folder: " + e.message, true); }
+  });
+  $("addFilesBtn").addEventListener("click", () => $("addFiles").click());
+  $("addFiles").addEventListener("change", e => {
+    const files = [...e.target.files]; if (!files.length) return;
+    dirHandle = null; db = normalize(lsLoad()); singer = db.lastSinger;
+    library = files.map(f => ({ key: f.name, name: f.name, file: f })).sort((a, b) => a.key.localeCompare(b.key));
+    showLibrary(); say(files.length + " song" + (files.length > 1 ? "s" : "") + " added.");
+  });
+
+  /* ================= open a song ================= */
+  function readFileBytes(file){
+    return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error || new Error("Could not read file")); r.readAsArrayBuffer(file); });
+  }
+  async function openSong(entry){
+    try {
+      say("Loading " + entry.name + "...");
+      await Tone.start();
+      if (playing) pause();
+      if (player){ player.dispose(); player = null; }
+      const file = entry.file || await entry.handle.getFile();
+      const raw = await readFileBytes(file);
+      audioBuf = await Tone.getContext().decodeAudioData(raw);
+      toneBuf = new Tone.ToneAudioBuffer(audioBuf);
+      current = entry;
+      const r = rec();
+      compare = false;
+      $("cmpBtn").setAttribute("aria-pressed", "false"); $("cmpBtn").textContent = "Hear original key";
+      fine = r.fine || 0; $("fine").value = fine;
+      target = r.targets[singer] ?? null;
+      markKey($("kbSinger"), target); $("nameSinger").textContent = nameOf(target);
+      player = new Tone.GrainPlayer({
+        url: toneBuf, grainSize: 0.15, overlap: 0.1,
+        playbackRate: 1, detune: 0
+      });
+      player.connect(songVol); player.connect(musicTap);
+      dur = audioBuf.duration; offset = 0; playing = false;
+      $("playBtn").textContent = "Play";
+      $("songName").textContent = entry.key;
+      $("seek").max = dur; $("seek").value = 0; $("seek").disabled = false;
+      $("tTotal").textContent = fmt(dur); $("tNow").textContent = "0:00";
+      ["playBtn","restartBtn","cmpBtn","recBtn"].forEach(id => $(id).disabled = false);
+      renderList(); refreshOrig(); refresh();
+      const rr = db.songs[entry.key] || {};
+      if (rr.original == null && scaleFromName(entry.name) === null && rr.detected == null) await analyseSong();
+      if (current !== entry) return;
+      say(original() === null ? "Song loaded. Choose the song's scale in step 2." :
+          target === null ? "Song loaded. Tap the required scale for " + singer + "." : "Song loaded with the saved scale for " + singer + ".");
+    } catch(e){
+      console.error(e);
+      say("Could not load this file (" + (e && e.message ? e.message : "unknown error") + ").", true);
+    }
+  }
+
+  /* ================= transport ================= */
+  const pos = () => playing ? Math.min(offset + (Tone.now() - startedAt), dur) : offset;
+  async function play(){
+    if (!player) return;
+    await Tone.start();
+    if (offset >= dur - 0.05) offset = 0;
+    startedAt = Tone.now(); player.start(startedAt, offset);
+    playing = true; $("playBtn").textContent = "Pause";
+    requestAnimationFrame(tick);
+  }
+  function pause(){
+    if (!player) return;
+    offset = pos(); try { player.stop(); } catch(e){}
+    playing = false; $("playBtn").textContent = "Play";
+  }
+  function seekTo(t){
+    if (!player) return;
+    if (playing){ try { player.stop(); } catch(e){} offset = t; startedAt = Tone.now(); player.start(startedAt, offset); }
+    else offset = t;
+    $("tNow").textContent = fmt(t);
+  }
+  function tick(){
+    if (!playing) return;
+    const p = pos();
+    if (!seeking){ $("seek").value = p; $("tNow").textContent = fmt(p); }
+    if (p >= dur - 0.02){
+      try { player.stop(); } catch(e){}
+      playing = false; offset = 0; $("playBtn").textContent = "Play"; $("seek").value = 0; $("tNow").textContent = "0:00";
+      if (recording) stopRecording();
+      return;
+    }
+    requestAnimationFrame(tick);
+  }
+  $("playBtn").addEventListener("click", () => playing ? pause() : play());
+  $("restartBtn").addEventListener("click", () => { $("seek").value = 0; seekTo(0); });
+  $("seek").addEventListener("input", e => { seeking = true; $("tNow").textContent = fmt(Number(e.target.value)); });
+  $("seek").addEventListener("change", e => { seeking = false; seekTo(Number(e.target.value)); });
+  $("cmpBtn").addEventListener("click", e => {
+    compare = !compare;
+    e.currentTarget.setAttribute("aria-pressed", compare ? "true" : "false");
+    e.currentTarget.textContent = compare ? "Back to shifted key" : "Hear original key";
+    refresh();
+  });
+  $("fine").addEventListener("input", e => { fine = Number(e.target.value); if (current){ rec().fine = fine; scheduleSave(); } refresh(); });
+  $("fineReset").addEventListener("click", () => { fine = 0; $("fine").value = 0; if (current){ rec().fine = 0; scheduleSave(); } refresh(); });
+  $("songVol").addEventListener("input", e => songVol.volume.value = Number(e.target.value));
+
+  /* ================= recording ================= */
+  let recording = false, starting = false, mic = null, voiceRec = null, musicRec = null, monitorGain = null, pulseSynths = null, recTimer = null, recStartMs = 0;
+  let recBufs = null, recSaved = true, replaceArmed = false, discardArmed = false;
+  const LOCK_IDS = ["playBtn","restartBtn","cmpBtn","seek","fine","fineReset"];
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const recSay = (m, err = false) => { say(m, err); const e = $("recMsg"); e.textContent = m; e.className = "recmsg" + (err ? " err" : ""); };
+
+  function lockUI(on){
+    LOCK_IDS.forEach(id => $(id).disabled = on);
+    $("secSong").inert = on; $("secScale").inert = on;
+  }
+  function micError(e){
+    const n = e && e.name;
+    if (n === "NotAllowedError" || n === "SecurityError") return "Microphone access was blocked. Allow the microphone for this page, then try again.";
+    if (n === "NotFoundError" || /No matching audio inputs/i.test((e && e.message) || "")) return "No microphone was found. Connect one and try again.";
+    return "Could not start the microphone (" + ((e && e.message) || "unknown error") + ").";
+  }
+
+  // A short marker sound is fed into BOTH recordings at the same instant. Finding it in each recording lines the two up exactly.
+  const PULSE_HZ = [3100, 4300, 5900], PULSE_GAP = 0.09;
+  function sendSyncPulse(){
+    pulseSynths = PULSE_HZ.map(() => {
+      const sy = new Tone.Synth({ oscillator: { type: "sine" }, envelope: { attack: 0.002, decay: 0.01, sustain: 1, release: 0.004 } });
+      sy.volume.value = -11; sy.connect(voiceRec); sy.connect(musicRec); return sy;
+    });
+    const t = Tone.now();
+    pulseSynths.forEach((sy, i) => sy.triggerAttackRelease(PULSE_HZ[i], 0.025, t));
+  }
+  function findPulse(buf){
+    const x = buf.getChannelData(0), sr = buf.sampleRate, win = Math.round(sr * 0.003), hop = Math.max(1, Math.round(sr * 0.001));
+    const end = Math.min(x.length - win, Math.floor(sr * 4)), n = Math.floor(end / hop);
+    if (n < 10) return null;
+    const mags = PULSE_HZ.map(f => {
+      const w = 2 * Math.PI * f / sr, c = 2 * Math.cos(w), o = new Float32Array(n);
+      for (let k = 0; k < n; k++){ let a = 0, b = 0; const s0 = k * hop; for (let i = 0; i < win; i++){ const t = x[s0 + i] + c * a - b; b = a; a = t; } o[k] = Math.sqrt(Math.max(0, a*a + b*b - c*a*b)) / win; }
+      return o;
+    });
+    const score = new Float32Array(n); let mx = 0, mxi = 0;
+    for (let k = 0; k < n; k++){ score[k] = Math.min(mags[0][k], mags[1][k], mags[2][k]); if (score[k] > mx){ mx = score[k]; mxi = k; } }
+    const med = Float32Array.from(score).sort()[Math.floor(n * 0.5)];
+    if (mx < 0.01 || mx < 12 * med) return null;
+    let k = mxi; while (k > 0 && score[k - 1] >= 0.5 * mx) k--;
+    return k * hop / sr;
+  }
+
+  async function startRecording(){
+    if (starting || recording) return;
+    if (!player) return recSay("Open a song first.", true);
+    if (original() === null || target === null) return recSay("Tap the required scale first, then press Record my singing.", true);
+    if (recBufs && !recSaved && !replaceArmed){
+      replaceArmed = true; return recSay("You have an unsaved recording. Save it, or press Record my singing again to replace it.", true);
+    }
+    replaceArmed = false;
+    if (!Tone.UserMedia || !Tone.UserMedia.supported || !Tone.Recorder || !Tone.Recorder.supported)
+      return recSay("Recording is not supported in this browser. Use Chrome or Edge.", true);
+    starting = true; $("recBtn").disabled = true;
+    recSay("Starting the microphone. Allow it if the browser asks.");
+    try {
+      await Tone.start();
+      if (playing) pause();
+      if (compare){ compare = false; $("cmpBtn").setAttribute("aria-pressed", "false"); $("cmpBtn").textContent = "Hear original key"; refresh(); }
+      mic = new Tone.UserMedia();
+      await mic.open();
+    } catch(e){ mic = null; starting = false; $("recBtn").disabled = false; return recSay(micError(e), true); }
+    try {
+      voiceRec = new Tone.Recorder(); musicRec = new Tone.Recorder();
+      mic.connect(voiceRec); musicTap.connect(musicRec);
+      if ($("monitor").checked){ monitorGain = monitorGain || new Tone.Gain(1).toDestination(); mic.connect(monitorGain); }
+      await Promise.all([voiceRec.start(), musicRec.start()]);
+      await sleep(250);
+      sendSyncPulse();
+      await sleep(100);
+    } catch(e){ console.error(e); cleanupRecording(); starting = false; $("recBtn").disabled = false; return recSay("Could not start recording (" + (e.message || "error") + ").", true); }
+    recording = true; starting = false; lockUI(true); $("recBtn").disabled = false;
+    const b = $("recBtn"); b.textContent = "Stop recording"; b.setAttribute("aria-pressed", "true");
+    recStartMs = Date.now();
+    recTimer = setInterval(() => recSay("Recording... " + fmt((Date.now() - recStartMs) / 1000) + ". Sing now. Press Stop recording when you finish."), 500);
+    recSay("Recording... Sing now. Press Stop recording when you finish.");
+    offset = 0; $("seek").value = 0;
+    await play();
+  }
+
+  function cleanupRecording(){
+    try { if (monitorGain && mic) mic.disconnect(monitorGain); } catch(e){}
+    try { if (mic){ mic.close(); mic.dispose(); } } catch(e){}
+    try { musicTap.disconnect(); } catch(e){}
+    try { pulseSynths && pulseSynths.forEach(sy => sy.dispose()); } catch(e){}
+    try { voiceRec && voiceRec.dispose(); } catch(e){}
+    try { musicRec && musicRec.dispose(); } catch(e){}
+    mic = voiceRec = musicRec = pulseSynths = null;
+  }
+
+  async function stopRecording(){
+    if (!recording) return;
+    recording = false; clearInterval(recTimer);
+    pause(); offset = 0; $("seek").value = 0; $("tNow").textContent = "0:00";
+    let vBlob = null, mBlob = null;
+    try { [vBlob, mBlob] = await Promise.all([voiceRec.stop(), musicRec.stop()]); }
+    catch(e){ console.error(e); recSay("The recording could not be saved (" + (e.message || "error") + ").", true); }
+    cleanupRecording();
+    lockUI(false);
+    const b = $("recBtn"); b.textContent = "Record my singing"; b.setAttribute("aria-pressed", "false");
+    if (vBlob && mBlob) await prepareReview(vBlob, mBlob);
+  }
+
+  const decodeBlob = async blob => Tone.getContext().decodeAudioData(await readFileBytes(blob));
+  const peakOf = buf => { let m = 0; for (let c = 0; c < buf.numberOfChannels; c++){ const d = buf.getChannelData(c); for (let i = 0; i < d.length; i++){ const a = Math.abs(d[i]); if (a > m) m = a; } } return m; };
+
+  async function prepareReview(vBlob, mBlob){
+    recSay("Preparing your recording...");
+    try {
+      const [voice, music] = await Promise.all([decodeBlob(vBlob), decodeBlob(mBlob)]);
+      pvStop(true);
+      // line the two recordings up using the marker sound that went into both
+      const pv_ = findPulse(voice), pm_ = findPulse(music);
+      let v0 = 0, m0 = 0, align = "";
+      if (pv_ !== null && pm_ !== null){
+        v0 = pv_ + PULSE_GAP; m0 = pm_ + PULSE_GAP;
+        const d = Math.round((pm_ - pv_) * 1000);
+        align = Math.abs(d) < 15 ? "The voice and music recordings were lined up automatically." :
+          "The voice and music recordings started " + Math.abs(d) + " ms apart. This was corrected automatically.";
+      } else align = "Could not line up the two recordings automatically. Use Voice timing to match them.";
+      recBufs = { voice, music, v0, m0, song: current.name.replace(/\.[^.]+$/, ""), singer, note: NOTES[target] };
+      recSaved = false; discardArmed = false; $("recDiscard").textContent = "Discard";
+      $("alignInfo").textContent = align;
+      // the singer hears the music a little late (headphones and sound card), so the voice is recorded late: start with an estimate
+      const raw = Tone.getContext().rawContext || {};
+      const est = Math.max(-500, Math.min(1500, Math.round(((raw.baseLatency || 0) + (raw.outputLatency || 0)) * 1000 + 40)));
+      $("recTiming").value = est; $("recTimingOut").textContent = est + " ms";
+      $("pvTotal").textContent = fmt(pvLen()); $("pvSeek").max = pvLen(); $("pvSeek").value = 0; $("pvNow").textContent = "0:00";
+      updateInfo();
+      $("recSection").hidden = false;
+      $("recSection").scrollIntoView({ behavior: "smooth", block: "start" });
+      const quiet = peakOf(voice) < 0.003;
+      recSay(quiet ? "Recording ready, but almost no voice was picked up. Check that the right microphone is selected." : "Recording ready. Press Play recording, adjust Voice timing if needed, then save.", quiet);
+    } catch(e){ console.error(e); recSay("Could not prepare the recording (" + (e.message || "error") + ").", true); }
+  }
+
+  function encodeWav(buf){
+    const ch = Math.min(2, buf.numberOfChannels), n = buf.length, sr = buf.sampleRate;
+    let peak = 0; const data = [];
+    for (let c = 0; c < ch; c++){ const d = buf.getChannelData(c); data.push(d); for (let i = 0; i < n; i++){ const a = Math.abs(d[i]); if (a > peak) peak = a; } }
+    const g = peak > 0.98 ? 0.98 / peak : 1;                       // avoid clipping when voice and music add up
+    const ab = new ArrayBuffer(44 + n * ch * 2), v = new DataView(ab);
+    const str = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+    str(0, "RIFF"); v.setUint32(4, 36 + n * ch * 2, true); str(8, "WAVE"); str(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, ch, true); v.setUint32(24, sr, true);
+    v.setUint32(28, sr * ch * 2, true); v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true); str(36, "data"); v.setUint32(40, n * ch * 2, true);
+    let o = 44;
+    for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++){ const x = Math.max(-1, Math.min(1, data[c][i] * g)); v.setInt16(o, x < 0 ? x * 0x8000 : x * 0x7FFF, true); o += 2; }
+    return new Blob([ab], { type: "audio/wav" });
+  }
+
+  /* ----- the mix: one function used for the live preview and for the saved file ----- */
+  const timingSec = () => Number($("recTiming").value) / 1000;
+  function pvLen(){ if (!recBufs) return 0; const { voice, music, v0, m0 } = recBufs; return Math.max(0.1, Math.max(music.duration - m0, voice.duration - v0 - timingSec())); }
+  function updateInfo(){
+    if (!recBufs) return;
+    const mb = Math.max(1, Math.round(pvLen() * recBufs.music.sampleRate * 4 / 1048576));
+    $("recInfo").textContent = "Length " + fmt(pvLen()) + ", the saved WAV file will be about " + mb + " MB.";
+  }
+  function buildMix(ctx, from){
+    const { voice, music, v0, m0 } = recBufs;
+    const vol = Number($("recVoice").value) / 100, mus = Number($("recMusic").value) / 100, rv = $("recReverb").value, sr = ctx.sampleRate;
+    const mg = ctx.createGain(); mg.gain.value = mus; mg.connect(ctx.destination);
+    const vg = ctx.createGain(); vg.gain.value = vol; vg.connect(ctx.destination);
+    let wg = null;
+    if (rv !== "off"){
+      const T = rv === "light" ? 1.2 : 2.2, wet = rv === "light" ? 0.18 : 0.3, len = Math.floor(sr * T);
+      const ir = ctx.createBuffer(2, len, sr);
+      for (let c = 0; c < 2; c++){ const d = ir.getChannelData(c); for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3); }
+      const cv = ctx.createConvolver(); cv.buffer = ir; wg = ctx.createGain(); wg.gain.value = wet * 0.5;
+      vg.connect(cv); cv.connect(wg); wg.connect(ctx.destination);
+    }
+    const ms = ctx.createBufferSource(); ms.buffer = music; ms.connect(mg);
+    const vs = ctx.createBufferSource(); vs.buffer = voice; vs.connect(vg);
+    ms.start(0, m0 + from);
+    const vOff = v0 + timingSec() + from;                              // positive timing = the voice is moved earlier
+    if (vOff >= 0) vs.start(0, vOff); else vs.start(-vOff, 0);
+    return { ms, vs, mg, vg, wg };
+  }
+
+  /* ----- live preview: plays the mix instantly, so every change can be heard at once ----- */
+  let pvCtx = null, pvNodes = null, pvPlaying = false, pvStartCtx = 0, pvFrom = 0, pvSeeking = false, pvRestart = null;
+  const pvPos = () => pvPlaying ? Math.min(pvFrom + (pvCtx.currentTime - pvStartCtx), pvLen()) : pvFrom;
+  function pvStopNodes(){
+    if (!pvNodes) return;
+    try { pvNodes.ms.stop(); } catch(e){} try { pvNodes.vs.stop(); } catch(e){}
+    try { pvNodes.mg.disconnect(); pvNodes.vg.disconnect(); pvNodes.wg && pvNodes.wg.disconnect(); } catch(e){}
+    pvNodes = null;
+  }
+  async function pvStart(from){
+    if (!recBufs) return;
+    pvStopNodes();
+    pvCtx = pvCtx || new (window.AudioContext || window.webkitAudioContext)();
+    try { await pvCtx.resume(); } catch(e){}
+    pvNodes = buildMix(pvCtx, from);
+    pvFrom = from; pvStartCtx = pvCtx.currentTime; pvPlaying = true;
+    $("pvPlay").textContent = "Pause recording";
+    requestAnimationFrame(pvTick);
+  }
+  function pvPause(){ if (!pvPlaying) return; pvFrom = pvPos(); pvStopNodes(); pvPlaying = false; $("pvPlay").textContent = "Play recording"; }
+  function pvStop(reset){
+    pvStopNodes(); pvPlaying = false; if (reset) pvFrom = 0;
+    $("pvPlay").textContent = "Play recording"; $("pvSeek").value = pvFrom; $("pvNow").textContent = fmt(pvFrom);
+  }
+  function pvTick(){
+    if (!pvPlaying) return;
+    const p = pvPos();
+    if (!pvSeeking){ $("pvSeek").value = p; $("pvNow").textContent = fmt(p); }
+    if (p >= pvLen() - 0.02){ pvStop(true); return; }
+    requestAnimationFrame(pvTick);
+  }
+  $("pvPlay").addEventListener("click", () => pvPlaying ? pvPause() : pvStart(pvFrom >= pvLen() - 0.05 ? 0 : pvFrom));
+  $("pvStop").addEventListener("click", () => { const was = pvPlaying; pvStop(true); if (was) pvStart(0); });
+  $("pvSeek").addEventListener("input", e => { pvSeeking = true; $("pvNow").textContent = fmt(Number(e.target.value)); });
+  $("pvSeek").addEventListener("change", e => { pvSeeking = false; const t = Number(e.target.value); if (pvPlaying) pvStart(t); else pvFrom = t; });
+  const pvRefresh = () => { clearTimeout(pvRestart); pvRestart = setTimeout(() => { updateInfo(); $("pvSeek").max = pvLen(); $("pvTotal").textContent = fmt(pvLen()); if (pvPlaying) pvStart(pvPos()); }, 80); };
+  $("recVoice").addEventListener("input", e => { $("recVoiceOut").textContent = e.target.value + "%"; if (pvNodes) pvNodes.vg.gain.value = Number(e.target.value) / 100; });
+  $("recMusic").addEventListener("input", e => { $("recMusicOut").textContent = e.target.value + "%"; if (pvNodes) pvNodes.mg.gain.value = Number(e.target.value) / 100; });
+  $("recTiming").addEventListener("input", e => { $("recTimingOut").textContent = e.target.value + " ms"; pvRefresh(); });
+  $("recReverb").addEventListener("change", pvRefresh);
+  [["tMinus", -10], ["tPlus", 10]].forEach(([id, dx]) => $(id).addEventListener("click", () => {
+    const r = $("recTiming"); r.value = Math.max(-500, Math.min(1500, Number(r.value) + dx));
+    $("recTimingOut").textContent = r.value + " ms"; pvRefresh();
+  }));
+
+  $("recSave").addEventListener("click", async () => {
+    if (!recBufs) return;
+    try {
+      recSay("Creating your file...");
+      const rv = $("recReverb").value, sr = recBufs.music.sampleRate, secs = pvLen() + (rv === "off" ? 0 : 1.5);
+      const oc = new OfflineAudioContext(2, Math.ceil(secs * sr), sr);
+      buildMix(oc, 0);
+      const blob = encodeWav(await oc.startRendering());
+      const clean = t => t.replace(/[\\/:*?"<>|]/g, "").trim();
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = clean(recBufs.song) + " - " + clean(recBufs.singer) + " - " + recBufs.note + ".wav";
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      recSaved = true; recSay("Saved as " + a.download + " in your Downloads folder.");
+    } catch(e){ console.error(e); recSay("Could not create the file (" + (e.message || "error") + ").", true); }
+  });
+  $("recDiscard").addEventListener("click", e => {
+    if (!discardArmed){ discardArmed = true; e.currentTarget.textContent = "Click again to discard"; return; }
+    pvStop(true); recBufs = null; recSaved = true; discardArmed = false; e.currentTarget.textContent = "Discard";
+    $("recSection").hidden = true; recSay("Recording discarded.");
+  });
+  $("recBtn").addEventListener("click", () => recording ? stopRecording() : startRecording());
+  $("monitor").addEventListener("change", e => {
+    if (!mic) return;
+    try { if (e.target.checked){ monitorGain = monitorGain || new Tone.Gain(1).toDestination(); mic.connect(monitorGain); } else if (monitorGain) mic.disconnect(monitorGain); } catch(err){}
+  });
+  window.addEventListener("beforeunload", e => { if (recBufs && !recSaved){ e.preventDefault(); e.returnValue = ""; } });
+
+  /* ================= tanpura ================= */
+  const RATIO = { pa: 0.75, ma: 2/3, ni: 15/16 };
+  function droneFreqs(){
+    const sa = midiHz(48 + (target ?? 0));
+    const first = RATIO[document.querySelector('input[name="str"]:checked').value];
+    return [sa*first, sa, sa, sa/2];
+  }
+  $("droneBtn").addEventListener("click", async e => {
+    const btn = e.currentTarget;
+    if (!droneOn){
+      if (target === null){ say("Tap the required scale first, then start the tanpura.", true); return; }
+      await Tone.start(); strIdx = 0;
+      loop.start(0); Tone.Transport.start();
+      droneOn = true; btn.textContent = "Stop tanpura"; btn.setAttribute("aria-pressed", "true");
+    } else {
+      loop.stop(); Tone.Transport.stop();
+      droneOn = false; btn.textContent = "Start tanpura"; btn.setAttribute("aria-pressed", "false");
+    }
+  });
+  $("droneVol").addEventListener("input", e => droneVol.volume.value = Number(e.target.value));
+
+  /* ================= start ================= */
+  const saved = lsLoad(); if (saved){ db = normalize(saved); singer = db.lastSinger; }
+  renderSingers(); refresh();
+  if (typeof Tone === "undefined") say("Audio library could not load. Check your internet connection and reload.", true);
+})();
+</script>
+</body>
+</html>
